@@ -9,6 +9,9 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import text
 
+from echo_v2.persistence.contacts import ContactRecord, PostgresContactRepository
+from echo_v2.persistence.orm import UserRow
+from echo_v2.persistence.user_resolver import PostgresUserResolver
 from echo_v2.runtime.idempotency import ReserveStatus
 from tests.persistence.test_postgres_webhook_dedup import seed_channel
 
@@ -67,3 +70,52 @@ async def test_uow_claim_duplicate_inside_transaction(unit_of_work_factory, sess
         second = await uow.webhooks.claim("evt-uow-3", provider="360dialog", channel_id=channel_id)
         assert first is True
         assert second is False
+
+
+async def test_postgres_contacts_upsert_and_scoped_case_insensitive_search(session_factory, clean_db):
+    async with session_factory() as session:
+        first = UserRow(phone_number="+972546610653", timezone="Asia/Jerusalem")
+        second = UserRow(phone_number="+972546610654", timezone="UTC")
+        session.add_all([first, second])
+        await session.commit()
+        first_id, second_id = str(first.id), str(second.id)
+
+    repo = PostgresContactRepository(session_factory)
+    phone = "+972501234567"
+    original = ContactRecord(first_id, "Alice Smith", phone)
+    another = ContactRecord(second_id, "Alice Other", phone)
+    await repo.save(original)
+    await repo.save(another)
+    assert await repo.find_by_name(first_id, "  aLIce ") == original
+    assert await repo.find_by_phone(first_id, phone) == original
+    assert await repo.find_by_name(first_id, "Missing") is None
+    assert await repo.find_by_phone(first_id, "+972500000000") is None
+    assert await repo.find_by_name(second_id, "Smith") is None
+    assert await repo.find_by_phone(second_id, phone) == another
+
+    renamed = ContactRecord(first_id, "Alicia", phone)
+    await repo.save(renamed)
+    assert await repo.find_by_name(first_id, "Alice") is None
+    assert await repo.find_by_phone(first_id, phone) == renamed
+    assert await repo.find_by_phone(second_id, phone) == another
+    async with session_factory() as session:
+        count = (await session.execute(
+            text("SELECT count(*) FROM contacts WHERE user_id = :uid"), {"uid": first_id}
+        )).scalar_one()
+    assert count == 1
+
+
+async def test_postgres_user_resolver_normalization_timezone_fallback_and_missing(session_factory, clean_db):
+    async with session_factory() as session:
+        first = UserRow(phone_number="+972546610653", timezone="Asia/Jerusalem")
+        second = UserRow(phone_number="+972546610654", timezone=None)
+        session.add_all([first, second])
+        await session.commit()
+        first_id, second_id = str(first.id), str(second.id)
+
+    async with session_factory() as session:
+        resolver = PostgresUserResolver(session)
+        assert await resolver.resolve("0546610653") == (first_id, "Asia/Jerusalem")
+        assert await resolver.resolve("0546610654") == (second_id, "UTC")
+        assert await resolver.resolve("+972546610655") is None
+        assert await resolver.resolve("not-a-number") is None

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from echo_v2.integrations.dialog360.events import Dialog360EventAdapter
 from echo_v2.ports.bot import BotEventAdapter, BotEventType
 
@@ -211,3 +213,70 @@ def test_parse_falls_back_to_message_from_for_phone():
     event = adapter.parse(payload)
     assert event is not None
     assert event.user_phone == "972500000099"
+
+
+def _payload(message: dict, *, contacts: list | None = None, metadata: dict | None = None) -> dict:
+    value = {"messages": [message], "contacts": contacts or []}
+    if metadata is not None:
+        value["metadata"] = metadata
+    return {"entry": [{"changes": [{"value": value}]}]}
+
+
+@pytest.mark.parametrize("message", [None, "bad", 123])
+def test_parse_non_object_message_returns_none(message):
+    payload = _payload({"id": "unused"})
+    payload["entry"][0]["changes"][0]["value"]["messages"] = [message]
+    assert Dialog360EventAdapter().parse(payload) is None
+
+
+def test_parse_missing_sender_returns_none():
+    assert Dialog360EventAdapter().parse(_payload({"id": "m1", "type": "text", "text": {"body": "hello"}})) is None
+
+
+@pytest.mark.parametrize("body", [{}, {"body": ""}, "not a dict"])
+def test_parse_empty_text_returns_none(body):
+    message = {"id": "m1", "from": "972500000001", "type": "text", "text": body}
+    assert Dialog360EventAdapter().parse(_payload(message)) is None
+
+
+@pytest.mark.parametrize("contacts", [[], ["invalid"]])
+def test_parse_empty_shared_contact_returns_none(contacts):
+    message = {"id": "m1", "from": "972500000001", "type": "contacts", "contacts": contacts}
+    assert Dialog360EventAdapter().parse(_payload(message)) is None
+
+
+def test_parse_contact_uses_phone_when_wa_id_missing():
+    message = {
+        "id": "m1", "from": "972500000001", "type": "contacts",
+        "contacts": [{"name": "unexpected", "phones": [None, {"phone": "+972 50-000-0002"}]}],
+    }
+    event = Dialog360EventAdapter().parse(_payload(message, metadata={"phone_number_id": "business-456"}))
+    assert event is not None
+    assert event.contact.name == ""
+    assert event.contact.phone == "+972 50-000-0002"
+    assert event.business_phone_number_id == "business-456"
+
+
+def test_parse_contact_uses_first_and_last_names():
+    message = {
+        "id": "m1", "from": "972500000001", "type": "contacts",
+        "contacts": [{"name": {"first_name": "Dana", "last_name": "Cohen"}, "phones": [{"wa_id": "972500000002"}]}],
+    }
+    event = Dialog360EventAdapter().parse(_payload(message))
+    assert event is not None
+    assert event.contact.name == "Dana Cohen"
+
+
+@pytest.mark.parametrize("payload", [
+    {"entry": [{"changes": []}]},
+    {"entry": [{"changes": [{"value": []}]}]},
+])
+def test_parse_invalid_change_returns_none(payload):
+    assert Dialog360EventAdapter().parse(payload) is None
+
+
+def test_parse_invalid_timestamp_is_ignored():
+    message = {"id": "m1", "from": "972500000001", "type": "text", "text": {"body": "hello"}, "timestamp": "invalid"}
+    event = Dialog360EventAdapter().parse(_payload(message))
+    assert event is not None
+    assert event.timestamp is None

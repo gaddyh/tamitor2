@@ -103,3 +103,40 @@ async def test_send_text_connect_error_is_retryable():
     with pytest.raises(RetryableError):
         await client.send_text("972500000001", "hello")
     await client.aclose()
+
+
+async def test_send_text_accepts_top_level_message_id():
+    client = _make_client(lambda request: httpx.Response(200, json={"message_id": "wamid.TOP"}))
+    assert await client.send_text("972500000001@c.us", "hello") == "wamid.TOP"
+    await client.aclose()
+
+
+@pytest.mark.parametrize("body", [{}, {"messages": []}, {"messages": [{}]}, ["invalid"]])
+async def test_send_text_rejects_missing_message_id(body):
+    client = _make_client(lambda request: httpx.Response(200, json=body))
+    with pytest.raises(PermanentError, match="missing message id"):
+        await client.send_text("972500000001", "hello")
+    await client.aclose()
+
+
+async def test_send_text_rejects_non_json_response():
+    client = _make_client(lambda request: httpx.Response(200, content=b"not json"))
+    with pytest.raises(PermanentError, match="missing message id"):
+        await client.send_text("972500000001", "hello")
+    await client.aclose()
+
+
+async def test_send_text_other_http_error_is_indeterminate():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.WriteError("connection lost", request=request)
+
+    client = _make_client(handler)
+    with pytest.raises(IndeterminateError, match="transport error"):
+        await client.send_text("972500000001", "hello")
+    await client.aclose()
+
+
+async def test_client_closes_its_own_http_connection():
+    client = Dialog360Client(Dialog360Settings())
+    await client.aclose()
+    assert client._client.is_closed

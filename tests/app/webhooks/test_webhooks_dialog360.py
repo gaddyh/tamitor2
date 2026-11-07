@@ -197,3 +197,29 @@ def test_no_secret_accepts_alt_path(no_secret_client):
     assert resp.status_code == 200
     assert resp.json()["status"] == "received"
     assert len(flow.handled) == 1
+
+
+def test_configured_app_mounts_webhook(monkeypatch):
+    monkeypatch.setenv("D360_WEBHOOK_SECRET", WEBHOOK_SECRET)
+    flow = RecordingFlowService()
+    with TestClient(create_app(handler=flow)) as client:
+        response = client.post("/webhooks/bot/dialog360", json=_text_payload(), headers=AUTH_HEADER)
+    assert response.json()["status"] == "received"
+    assert len(flow.handled) == 1
+
+
+def test_non_object_json_returns_400(client):
+    c, _ = client
+    response = c.post("/webhooks/bot/dialog360", json=["not an object"], headers=AUTH_HEADER)
+    assert response.status_code == 400
+
+
+@pytest.mark.parametrize("authorization", ["Basic secret", "Bearer", "Bearer "])
+def test_malformed_authorization_returns_401(client, authorization):
+    c, _ = client
+    response = c.post(
+        "/webhooks/bot/dialog360",
+        json=_text_payload(),
+        headers={"Authorization": authorization},
+    )
+    assert response.status_code == 401

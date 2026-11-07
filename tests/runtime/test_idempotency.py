@@ -181,6 +181,71 @@ async def test_renew_lease_returns_true_for_owner_false_for_non_owner():
     assert await store.renew_lease("k", r.owner_token) is False
 
 
+async def test_wait_for_completion_after_owner_finishes_returns_outcome():
+    store: InMemoryIdempotencyStore[int] = InMemoryIdempotencyStore()
+    reservation = await store.reserve("k")
+    outcome = SuccessOutcome(value=42, attempts=1, duration_ms=1.0)
+
+    await store.put_success("k", reservation.owner_token, outcome)
+
+    assert await store.wait_for_completion("k") is outcome
+
+
+@pytest.mark.parametrize("outcome_kind", ["success", "failure", "indeterminate", "release"])
+async def test_cancelled_waiter_does_not_prevent_owner_from_finishing(outcome_kind):
+    store: InMemoryIdempotencyStore[int] = InMemoryIdempotencyStore()
+    reservation = await store.reserve("k")
+    waiter = asyncio.create_task(store.wait_for_completion("k"))
+    await asyncio.sleep(0)
+    waiter.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await waiter
+
+    if outcome_kind == "release":
+        await store.release("k", reservation.owner_token)
+        assert await store.get("k") is None
+        assert (await store.reserve("k")).status == ReserveStatus.ACQUIRED
+    else:
+        outcomes = {
+            "success": SuccessOutcome(value=42, attempts=1, duration_ms=1.0),
+            "failure": PermanentFailureOutcome(error_type="PermanentError", error_message="nope"),
+            "indeterminate": IndeterminateOutcome(error_type="TimeoutError", error_message="unknown"),
+        }
+        outcome = outcomes[outcome_kind]
+        if outcome_kind == "success":
+            await store.put_success("k", reservation.owner_token, outcome)
+        elif outcome_kind == "failure":
+            await store.put_failure("k", reservation.owner_token, outcome)
+        else:
+            await store.put_indeterminate("k", reservation.owner_token, outcome)
+        assert await store.get("k") is outcome
+        assert (await store.reserve("k")).status == ReserveStatus.COMPLETED
+
+
+@pytest.mark.parametrize("owner_action", ["put_success", "put_failure", "put_indeterminate", "release"])
+async def test_prior_owner_cannot_write_after_release(owner_action):
+    store: InMemoryIdempotencyStore[int] = InMemoryIdempotencyStore()
+    prior = await store.reserve("k")
+    await store.release("k", prior.owner_token)
+
+    outcomes = {
+        "put_success": SuccessOutcome(value=1, attempts=1, duration_ms=1.0),
+        "put_failure": PermanentFailureOutcome(error_type="PermanentError", error_message="nope"),
+        "put_indeterminate": IndeterminateOutcome(error_type="TimeoutError", error_message="unknown"),
+    }
+    with pytest.raises(LostOwnershipError, match="ownership lost"):
+        if owner_action == "release":
+            await store.release("k", prior.owner_token)
+        else:
+            await getattr(store, owner_action)("k", prior.owner_token, outcomes[owner_action])
+
+    assert await store.get("k") is None
+    current = await store.reserve("k")
+    assert current.owner_token != prior.owner_token
+    await store.put_success("k", current.owner_token, SuccessOutcome(value=2, attempts=1, duration_ms=1.0))
+    assert (await store.get("k")).value == 2
+
+
 # ---------------------------------------------------------------------------
 # End-to-end tests through execute()
 # ---------------------------------------------------------------------------

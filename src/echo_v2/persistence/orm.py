@@ -8,7 +8,16 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, ForeignKey, ForeignKeyConstraint, Index, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    CheckConstraint,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TIMESTAMP, LargeBinary, Uuid
@@ -16,11 +25,11 @@ from sqlalchemy.types import TIMESTAMP, LargeBinary, Uuid
 __all__ = [
     "Base",
     "BusinessRow",
-    "WhatsAppChannelRow",
     "ContactRow",
     "IdempotencyOperationRow",
     "ProviderWebhookEventRow",
     "UserRow",
+    "WhatsAppChannelRow",
 ]
 
 

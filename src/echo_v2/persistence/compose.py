@@ -11,7 +11,10 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from echo_v2.persistence.contacts import PostgresContactRepository
-from echo_v2.persistence.db import async_session_factory, create_async_engine_from_settings
+from echo_v2.persistence.db import (
+    async_session_factory,
+    create_async_engine_from_settings,
+)
 from echo_v2.persistence.postgres_idempotency import PostgresIdempotencyStore
 from echo_v2.persistence.postgres_webhook_dedup import PostgresWebhookDedupStore
 from echo_v2.persistence.settings import DBSettings

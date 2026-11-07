@@ -6,6 +6,7 @@ suite; here we cover the pure helpers that don't need a live DB.
 
 from __future__ import annotations
 
+from sqlalchemy import ForeignKeyConstraint
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from echo_v2.persistence.db import (
@@ -15,9 +16,8 @@ from echo_v2.persistence.db import (
     create_async_engine_from_settings,
     create_sync_engine_for_migrations,
 )
-from echo_v2.persistence.settings import DBSettings
 from echo_v2.persistence.orm import Base
-from sqlalchemy import ForeignKeyConstraint
+from echo_v2.persistence.settings import DBSettings
 
 
 def test_foundation_schema_has_business_number_and_receipt_mapping():

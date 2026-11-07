@@ -589,3 +589,57 @@ async def test_bare_execution_error_releases_idempotency_key():
     assert calls == 1
     # Key should be released (no stored outcome).
     assert await store.get("op:bare") is None
+
+
+async def test_execute_replays_outcome_completed_between_lookup_and_reservation():
+    from echo_v2.runtime.idempotency import InMemoryIdempotencyStore
+
+    first_lookup = asyncio.Event()
+    owner_finished = asyncio.Event()
+
+    class RacingStore(InMemoryIdempotencyStore[int]):
+        async def get(self, key):
+            outcome = await super().get(key)
+            if not first_lookup.is_set():
+                first_lookup.set()
+                await owner_finished.wait()
+            return outcome
+
+    store = RacingStore()
+    sink = InMemoryEventSink()
+    calls = 0
+
+    def operation(value: int) -> int:
+        nonlocal calls
+        calls += 1
+        return value * 2
+
+    async def first_caller():
+        return await execute(
+            operation=operation,
+            input_=21,
+            context=RunContext(operation_name="op"),
+            event_sink=sink,
+            idempotency_key="op:race",
+            idempotency_store=store,
+        )
+
+    racing_call = asyncio.create_task(first_caller())
+    try:
+        await first_lookup.wait()
+        owner_result = await execute(
+            operation=operation,
+            input_=21,
+            context=RunContext(operation_name="op"),
+            idempotency_key="op:race",
+            idempotency_store=store,
+        )
+        assert owner_result.value == 42
+    finally:
+        owner_finished.set()
+
+    replayed = await racing_call
+    assert replayed.value == 42
+    assert replayed.attempts == owner_result.attempts
+    assert calls == 1
+    assert [event.name for event in sink.events] == ["operation.idempotent.hit"]

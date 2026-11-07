@@ -13,10 +13,13 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import text
 
+from echo_v2.persistence import postgres_idempotency
 from echo_v2.persistence.postgres_idempotency import PostgresIdempotencyStore
 from echo_v2.runtime.errors import RetryableError
 from echo_v2.runtime.idempotency import (
@@ -229,3 +232,74 @@ async def test_wait_for_completion_released_raises_retryable(idempotency_repo):
     await idempotency_repo.release("k17", r.owner_token)
     with pytest.raises(RetryableError):
         await idempotency_repo.wait_for_completion("k17")
+
+
+@pytest.mark.parametrize("next_state, expected_status", [
+    ("IN_PROGRESS", ReserveStatus.IN_PROGRESS),
+    ("SUCCESS", ReserveStatus.COMPLETED),
+])
+async def test_reserve_losing_reclaim_race_rereads_state(
+    idempotency_repo, session_factory, monkeypatch, next_state, expected_status
+):
+    await idempotency_repo.reserve("reclaim-race")
+    async with session_factory() as session:
+        await session.execute(text(
+            "UPDATE idempotency_operations SET lease_expires_at = now() - interval '1 hour' "
+            "WHERE key = 'reclaim-race'"
+        ))
+        await session.commit()
+
+    original_fetch = postgres_idempotency._fetch_row
+    calls = 0
+
+    async def fetch_after_race(session, key):
+        nonlocal calls
+        calls += 1
+        row = await original_fetch(session, key)
+        if calls == 2:
+            return SimpleNamespace(state=next_state)
+        return row
+
+    monkeypatch.setattr(postgres_idempotency, "_fetch_row", fetch_after_race)
+    monkeypatch.setattr(postgres_idempotency, "_try_reclaim", AsyncMock(return_value=False))
+    result = await idempotency_repo.reserve("reclaim-race")
+    assert result.status is expected_status
+    assert result.owner_token is None
+    assert calls == 2
+
+
+async def test_get_terminal_row_without_outcome_returns_none(idempotency_repo, session_factory):
+    claim = await idempotency_repo.reserve("empty-outcome")
+    async with session_factory() as session:
+        await session.execute(text(
+            "UPDATE idempotency_operations SET state = 'SUCCESS', owner_token = NULL, "
+            "lease_expires_at = NULL WHERE key = 'empty-outcome'"
+        ))
+        await session.commit()
+    assert claim.status is ReserveStatus.ACQUIRED
+    assert await idempotency_repo.get("empty-outcome") is None
+
+
+async def test_wait_for_completion_reads_outcome_after_completed_reservation(idempotency_repo, monkeypatch):
+    outcome = SuccessOutcome(value=8, attempts=1, duration_ms=1.0)
+    get = AsyncMock(side_effect=[None, outcome])
+    reserve = AsyncMock(return_value=postgres_idempotency.ReserveResult(ReserveStatus.COMPLETED))
+    monkeypatch.setattr(idempotency_repo, "get", get)
+    monkeypatch.setattr(idempotency_repo, "reserve", reserve)
+    assert await idempotency_repo.wait_for_completion("completed-race") == outcome
+    assert get.await_count == 2
+
+
+async def test_wait_for_completion_completed_without_outcome_is_retryable(idempotency_repo, monkeypatch):
+    monkeypatch.setattr(idempotency_repo, "get", AsyncMock(return_value=None))
+    monkeypatch.setattr(idempotency_repo, "reserve", AsyncMock(
+        return_value=postgres_idempotency.ReserveResult(ReserveStatus.COMPLETED)
+    ))
+    with pytest.raises(RetryableError, match="did not complete"):
+        await idempotency_repo.wait_for_completion("missing-outcome")
+
+
+async def test_wait_for_completion_times_out(idempotency_repo, monkeypatch):
+    monkeypatch.setattr(postgres_idempotency, "_POLL_TIMEOUT_SECONDS", 0)
+    with pytest.raises(RetryableError, match="Timed out waiting"):
+        await idempotency_repo.wait_for_completion("never-completes")

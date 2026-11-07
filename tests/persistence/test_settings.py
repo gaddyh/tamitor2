@@ -46,6 +46,12 @@ def test_load_db_settings_from_env(monkeypatch):
     assert settings.default_phone_region == "US"
 
 
+def test_load_db_settings_normalizes_plain_postgresql_url(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://env@localhost/envdb")
+    settings = load_db_settings()
+    assert settings.database_url == "postgresql+psycopg://env@localhost/envdb"
+
+
 def test_load_db_settings_explicit_url_overrides_env(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://env@localhost/envdb")
     settings = load_db_settings(database_url="postgresql+psycopg://explicit@localhost/mydb")
