@@ -33,10 +33,11 @@ from __future__ import annotations
 import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, cast
 
 from sqlalchemy import select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -208,8 +209,9 @@ class PostgresIdempotencyStore(IdempotencyStore[TOutput], Generic[TOutput]):
                 "DELETE FROM idempotency_operations "
                 "WHERE key = :key AND owner_token = :token AND state = 'IN_PROGRESS'"
             )
-            result = await session.execute(
-                stmt, {"key": key, "token": str(owner_token)}
+            result = cast(
+                CursorResult[Any],
+                await session.execute(stmt, {"key": key, "token": str(owner_token)}),
             )
             if result.rowcount == 0:
                 raise LostOwnershipError(
@@ -228,7 +230,7 @@ class PostgresIdempotencyStore(IdempotencyStore[TOutput], Generic[TOutput]):
                 )
                 .values(lease_expires_at=new_expiry, updated_at=datetime.now(timezone.utc))
             )
-            result = await session.execute(stmt)
+            result = cast(CursorResult[Any], await session.execute(stmt))
             return result.rowcount > 0
 
     # --- wait -------------------------------------------------------------
@@ -296,7 +298,7 @@ class PostgresIdempotencyStore(IdempotencyStore[TOutput], Generic[TOutput]):
                 )
                 .values(**values)
             )
-            result = await session.execute(stmt)
+            result = cast(CursorResult[Any], await session.execute(stmt))
             if result.rowcount == 0:
                 raise LostOwnershipError(
                     f"Terminal write for key {key!r} affected 0 rows; "

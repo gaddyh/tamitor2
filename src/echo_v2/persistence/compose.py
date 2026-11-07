@@ -7,6 +7,7 @@ from :class:`DBSettings`. The engine is not connected until first use.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -40,7 +41,7 @@ def build_postgres_repos(settings: DBSettings) -> PostgresRepos:
     factory = async_session_factory(engine)
 
     webhooks = PostgresWebhookDedupStore(factory)
-    idempotency = PostgresIdempotencyStore(factory)
+    idempotency: PostgresIdempotencyStore[Any] = PostgresIdempotencyStore(factory)
     contacts = PostgresContactRepository(factory)
 
     # A UoW factory bound to the same session_factory.

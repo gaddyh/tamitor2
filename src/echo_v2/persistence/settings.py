@@ -70,9 +70,7 @@ def load_db_settings(
     if parsed_key is None and raw_key:
         parsed_key = raw_key.encode("utf-8")
 
-    region = default_phone_region or os.getenv(
-        "TAMITOR_DEFAULT_PHONE_REGION", _DEFAULT_PHONE_REGION
-    )
+    region = default_phone_region or os.getenv("TAMITOR_DEFAULT_PHONE_REGION") or _DEFAULT_PHONE_REGION
 
     parsed_pool = pool_size if pool_size is not None else _DEFAULT_POOL_SIZE
     parsed_echo = echo if echo is not None else False

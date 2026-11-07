@@ -141,7 +141,7 @@ async def _run_with_retries(
             )
 
         except asyncio.TimeoutError as exc:
-            wrapped = TimeoutError(f"Operation timed out during run {context.run_id}")
+            wrapped: ExecutionError = TimeoutError(f"Operation timed out during run {context.run_id}")
 
             # An irreversible write that times out may have already produced
             # its side effect. Do NOT retry — propagate so execute() can store
