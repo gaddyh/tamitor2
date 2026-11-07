@@ -1,4 +1,4 @@
-"""Alembic migration environment for Echo v2.
+"""Alembic migration environment for TamiTor.
 
 Reads ``DATABASE_URL`` from the environment (falling back to the
 ``sqlalchemy.url`` in ``alembic.ini``). Uses the same
@@ -41,7 +41,7 @@ if _env_url:
         _env_url = _env_url.replace("postgresql://", "postgresql+psycopg://", 1)
     config.set_main_option("sqlalchemy.url", _env_url)
 
-# Echo ORM metadata — enables `alembic revision --autogenerate`.
+# TamiTor ORM metadata — enables `alembic revision --autogenerate`.
 target_metadata = Base.metadata
 
 

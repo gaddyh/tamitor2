@@ -1,4 +1,4 @@
-"""Async engine, session factory, and migration runner for Echo v2.
+"""Async engine, session factory, and migration runner for TamiTor.
 
 The engine and session factory are constructed at app composition time and
 injected into repositories — there is no module-level singleton (mirrors the

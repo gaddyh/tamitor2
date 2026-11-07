@@ -247,8 +247,8 @@ class InMemoryIdempotencyStore(Generic[TOutput]):
         DO NOT use in production. This store has no persistence, no
         cross-process coordination, and no lease/TTL on in-progress claims.
         A process restart forgets all stored outcomes and in-progress claims,
-        which violates the Echo "never blindly send again" guarantee for
-        scheduled WhatsApp sends. Use a persistent distributed store
+        which prevents reliable deduplication of external writes. Use a persistent
+        distributed store
         (Redis/Postgres) for any real workload. This implementation is
         suitable only for tests and local development.
 

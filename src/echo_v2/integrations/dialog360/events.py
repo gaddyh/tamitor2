@@ -68,6 +68,12 @@ class Dialog360EventAdapter:
 
         msg_type = message.get("type")
         timestamp = _timestamp(message.get("timestamp"))
+        metadata = value.get("metadata")
+        business_phone_number_id = (
+            str(metadata["phone_number_id"])
+            if isinstance(metadata, dict) and metadata.get("phone_number_id")
+            else None
+        )
 
         if msg_type == "text":
             body = message.get("text", {})
@@ -80,6 +86,7 @@ class Dialog360EventAdapter:
                 type=BotEventType.TEXT,
                 text=str(text),
                 timestamp=timestamp,
+                business_phone_number_id=business_phone_number_id,
             )
 
         if msg_type == "contacts":
@@ -95,6 +102,7 @@ class Dialog360EventAdapter:
                 type=BotEventType.CONTACT,
                 contact=parsed,
                 timestamp=timestamp,
+                business_phone_number_id=business_phone_number_id,
             )
 
         _logger.info("provider=dialog360 event=unknown message_type=%s", msg_type)

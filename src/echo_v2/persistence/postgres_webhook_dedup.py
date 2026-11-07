@@ -5,17 +5,12 @@ PostgreSQL. ``claim(key)`` is an ``INSERT ... ON CONFLICT DO NOTHING`` —
 returns ``True`` iff a row was inserted (first claim), ``False`` on
 duplicate.
 
-``connection_id`` is NOT NULL: an unknown instance is rejected at auth
-(no matching ``webhook_token_hash``) before reaching the dedup store, so
-every authenticated dedupe record has a connection. The optional metadata
-kwargs (``provider``, ``connection_id``, ``event_type``) are stored for
-operational visibility; the single-arg ``claim(key)`` form remains
-backward compatible (metadata defaults to ``None`` — but ``connection_id``
-is required by the schema, so callers using the Postgres store must supply
-it).
+``channel_id`` must refer to a verified business receiving number. Unknown
+numbers are rejected before claiming a receipt. The unique receipt identity
+is (provider, event_id), so providers cannot collide. A Postgres caller must
+supply both provider and channel_id; no unverified receipt is persisted.
 
-Session handling mirrors the connection repository: standalone by default,
-shared session in UoW mode (so ``claim`` + ``update_status`` can be atomic).
+Sessions are standalone by default, or shared within a UoW.
 """
 
 from __future__ import annotations
@@ -53,21 +48,15 @@ class PostgresWebhookDedupStore:
         key: str,
         *,
         provider: str | None = None,
-        connection_id: str | None = None,
+        channel_id: str | None = None,
         event_type: str | None = None,
     ) -> bool:
         """Atomically claim ``key``. ``True`` iff this is the first claim.
 
-        For the Postgres store, ``connection_id`` is required by the schema
-        (NOT NULL). Callers using the Postgres store must supply it; the
-        single-arg form is kept for backward compatibility with the protocol
-        but will raise an integrity error if ``connection_id`` is omitted.
+        The channel must be verified before a receipt can be claimed.
         """
-        if connection_id is None:
-            raise ValueError(
-                "PostgresWebhookDedupStore.claim requires connection_id "
-                "(the provider_webhook_events.connection_id column is NOT NULL)."
-            )
+        if channel_id is None:
+            raise ValueError("PostgresWebhookDedupStore.claim requires channel_id.")
         if provider is None:
             raise ValueError(
                 "PostgresWebhookDedupStore.claim requires provider."
@@ -79,10 +68,10 @@ class PostgresWebhookDedupStore:
                 .values(
                     event_id=key,
                     provider=provider,
-                    connection_id=connection_id,
+                    channel_id=channel_id,
                     event_type=event_type,
                 )
-                .on_conflict_do_nothing(index_elements=["event_id"])
+                .on_conflict_do_nothing(index_elements=["provider", "event_id"])
                 .returning(ProviderWebhookEventRow.event_id)
             )
             result = await session.execute(stmt)

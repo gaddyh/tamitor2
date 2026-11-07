@@ -32,16 +32,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from echo_v2.persistence.credential_cipher import IdentityCredentialCipher
 from echo_v2.persistence.db import run_migrations
 from echo_v2.persistence.postgres_idempotency import (
     PostgresIdempotencyStore,
 )
 from echo_v2.persistence.postgres_webhook_dedup import (
     PostgresWebhookDedupStore,
-)
-from echo_v2.persistence.postgres_whatsapp_connections import (
-    PostgresWhatsAppConnectionRepository,
 )
 from echo_v2.persistence.unit_of_work import PostgresUnitOfWork
 
@@ -137,22 +133,14 @@ async def clean_db(engine) -> AsyncIterator[None]:
         # Order matters: respect FK constraints (children first).
         await conn.exec_driver_sql(
             "TRUNCATE TABLE "
-            "scheduled_actions, "
-            "idempotency_operations, "
-            "provider_webhook_events, "
-            "whatsapp_connections, "
-            "users "
+            "contacts, idempotency_operations, provider_webhook_events, "
+            "users, whatsapp_channels, businesses "
             "RESTART IDENTITY CASCADE"
         )
     yield
 
 
 # --- repository fixtures ----------------------------------------------------
-
-@pytest_asyncio.fixture
-async def connections_repo(session_factory, clean_db) -> PostgresWhatsAppConnectionRepository:
-    return PostgresWhatsAppConnectionRepository(session_factory, IdentityCredentialCipher())
-
 
 @pytest_asyncio.fixture
 async def webhooks_repo(session_factory, clean_db) -> PostgresWebhookDedupStore:
@@ -167,16 +155,8 @@ async def idempotency_repo(session_factory, clean_db) -> PostgresIdempotencyStor
 @pytest_asyncio.fixture
 async def unit_of_work_factory(session_factory, clean_db):
     def _make() -> PostgresUnitOfWork:
-        return PostgresUnitOfWork(session_factory, IdentityCredentialCipher(), lease_seconds=2)
+        return PostgresUnitOfWork(session_factory, lease_seconds=2)
     return _make
-
-
-@pytest_asyncio.fixture
-async def scheduled_actions_repo(session_factory, clean_db) -> PostgresScheduledActionRepository:
-    from echo_v2.persistence.postgres_scheduled_actions import (
-        PostgresScheduledActionRepository,
-    )
-    return PostgresScheduledActionRepository(session_factory)
 
 
 # --- user helper ------------------------------------------------------------

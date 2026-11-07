@@ -1,20 +1,8 @@
-"""Provider-neutral Echo Business Bot ports and types.
+"""Provider-neutral WhatsApp message transport types for TamiTor.
 
-The Echo Business Bot is the conversational interface between the user and
-Echo. It is a **separate channel** from the user's own WhatsApp (Green API):
-
-* **Bot** (360dialog / Meta Cloud API) — the user chats with Echo here:
-  sends commands, vCards, time replies; receives confirmations.
-* **User's WhatsApp** (Green API) — Echo acts on the user's behalf here:
-  sends scheduled messages from the user's own number.
-
-This module defines the boundary between Echo's application code and any bot
-transport (360dialog today, maybe Telegram later). Provider-specific
-identifiers (D360 API keys, message IDs) never cross this boundary.
-
-The event model mirrors the two-layer pattern from ``ports/whatsapp.py``:
-bot events carry a ``user_phone`` (the sender's phone number), not a
-``user_id`` — the application layer resolves the phone to a user.
+The business number is resolved separately from the customer's phone so that
+messages cannot cross tenant boundaries. Provider-specific credentials stay
+inside the transport implementation.
 """
 
 from __future__ import annotations
@@ -29,6 +17,7 @@ __all__ = [
     "BotContact",
     "BotEvent",
     "BotEventAdapter",
+    "BotEventHandler",
     "BotEventType",
 ]
 
@@ -44,8 +33,7 @@ class BotEventType(Enum):
 class BotContact:
     """A shared contact (vCard) extracted from a bot message.
 
-    ``phone`` is the contact's phone number in E.164 or raw form — the
-    scheduling flow converts it to a Green API ``chat_id`` (``<phone>@c.us``).
+    ``phone`` is the shared contact's phone number in E.164 or raw form.
     ``name`` is the display name for confirmation messages.
     """
 
@@ -55,14 +43,10 @@ class BotContact:
 
 @dataclass(frozen=True)
 class BotEvent:
-    """An incoming event from the Echo Business Bot.
+    """An incoming event from a business's WhatsApp number.
 
-    ``user_phone`` is the sender's phone number (the Echo user), not the
-    contact's phone. The application resolves ``user_phone`` → ``user_id``
-    via the users table.
-
-    For ``TEXT`` events, ``text`` carries the message body.
-    For ``CONTACT`` events, ``contact`` carries the parsed vCard data.
+    ``user_phone`` is the customer's number; ``business_phone_number_id``
+    identifies the receiving business channel when present in the webhook.
     """
 
     event_id: str
@@ -71,6 +55,7 @@ class BotEvent:
     text: str | None = None
     contact: BotContact | None = None
     timestamp: datetime | None = None
+    business_phone_number_id: str | None = None
 
 
 @runtime_checkable
@@ -87,11 +72,14 @@ class BotEventAdapter(Protocol):
 
 
 @runtime_checkable
-class BotChannel(Protocol):
-    """Send outbound messages to a user via the Echo Business Bot.
+class BotEventHandler(Protocol):
+    """Process an authenticated incoming message after tenant resolution."""
 
-    ``user_phone`` is the recipient's phone number (the Echo user). The
-    implementation normalizes it to the provider's required format.
-    """
+    async def handle(self, event: BotEvent) -> None: ...
+
+
+@runtime_checkable
+class BotChannel(Protocol):
+    """Send a message via a business's configured WhatsApp channel."""
 
     async def send_text(self, user_phone: str, text: str) -> None: ...

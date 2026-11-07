@@ -1,10 +1,10 @@
 """Raw async HTTP client for 360dialog / WhatsApp Cloud API.
 
 This is the only module that knows 360dialog URL shapes and embeds the
-D360 API key. It sends messages **from the Echo Business Bot** to users.
-The bot is a single shared number — there is no per-user instance.
+D360 API key. Sending from business-owned numbers requires selecting the
+correct credential for the verified business channel before constructing it.
 
-Error classification follows the same taxonomy as :class:`GreenClient`:
+Error classification follows the transport error taxonomy:
 * 5xx / timeout on a send → :class:`IndeterminateError` (message may have
   been delivered; never blindly retry).
 * 4xx (non-429) → :class:`PermanentError`.

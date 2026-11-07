@@ -1,9 +1,8 @@
 """Settings for the 360dialog integration.
 
 Read from environment variables. The API key is the per-phone-number key
-from the 360dialog dashboard. The webhook secret is a bearer token Echo
-generates and configures in the 360dialog dashboard — incoming webhooks
-must carry it in the ``Authorization`` header.
+from the 360dialog dashboard. A webhook bearer secret is used only when
+the configured provider delivery supports the ``Authorization`` header.
 """
 
 from __future__ import annotations

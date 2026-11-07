@@ -7,7 +7,7 @@ Normalization collapses them to one canonical value before insert, so the
 ``UNIQUE`` constraint correctly treats them as one row.
 
 Numbers without an explicit country code are parsed against a default
-region (``ECHO_DEFAULT_PHONE_REGION``, default ``IL`` for the MVP audience).
+region (``TAMITOR_DEFAULT_PHONE_REGION``, default ``IL`` for the MVP audience).
 """
 
 from __future__ import annotations

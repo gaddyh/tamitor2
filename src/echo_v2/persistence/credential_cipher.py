@@ -1,16 +1,15 @@
 """Credential encryption boundary for provider credentials at rest.
 
-The ``credentials`` BYTEA column in ``whatsapp_connections`` stores
-*encrypted* bytes, not raw :class:`ProviderCredentials.data`. ``repr=False``
-on :class:`ProviderCredentials` protects logs; it does not protect a
-database dump or a leaked backup. This module defines the cipher boundary
-so the schema means "encrypted blob" from day one.
+The optional ``credentials`` BYTEA column in ``whatsapp_channels`` stores
+*encrypted* bytes, never raw provider secrets. Redacting logs does not
+protect a database dump or leaked backup. This module defines the cipher
+boundary so the schema means "encrypted blob" from day one.
 
-The cipher is constructed at app composition time from ``ECHO_CREDENTIAL_KEY``
+The cipher is constructed at app composition time from ``TAMITOR_CREDENTIAL_KEY``
 (env). Repositories call ``encrypt`` on save and ``decrypt`` on retrieve;
 callers never see the ciphertext. Swapping :class:`LocalKeyCredentialCipher`
-for a KMS/secret-manager-backed implementation later changes one
-composition-time wire, not the schema, the repos, or the protocol.
+for a KMS/secret-manager-backed implementation later does not change the
+schema or the protocol.
 """
 
 from __future__ import annotations
@@ -43,7 +42,7 @@ class CredentialCipher(Protocol):
 
 
 class LocalKeyCredentialCipher:
-    """Symmetric encryption keyed from ``ECHO_CREDENTIAL_KEY``.
+    """Symmetric encryption keyed from ``TAMITOR_CREDENTIAL_KEY``.
 
     Uses :class:`cryptography.fernet.Fernet` (AES-128-CBC + HMAC-SHA256).
     Suitable for local dev and single-instance deploys. Replace with a

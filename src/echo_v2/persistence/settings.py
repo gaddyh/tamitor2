@@ -1,4 +1,4 @@
-"""Persistence-layer settings for Echo v2.
+"""Persistence-layer settings for TamiTor.
 
 Loaded from environment variables. The application bootstrap is responsible
 for calling :func:`load_dotenv` (python-dotenv) before constructing settings;
@@ -10,7 +10,7 @@ that inject values directly.
 ``create_engine()`` and async under ``create_async_engine()``. Do not strip
 ``+psycopg``.
 
-``ECHO_CREDENTIAL_KEY`` is a 44-char url-safe base64 Fernet key used by
+``TAMITOR_CREDENTIAL_KEY`` is a 44-char url-safe base64 Fernet key used by
 :class:`echo_v2.persistence.credential_cipher.LocalKeyCredentialCipher`.
 Required in non-test environments; tests inject an
 :class:`echo_v2.persistence.credential_cipher.IdentityCredentialCipher`.
@@ -49,7 +49,7 @@ def load_db_settings(
     """Build :class:`DBSettings` from arguments or environment.
 
     ``DATABASE_URL`` is required — a missing URL is a deployment/configuration
-    error, not a runtime error. ``ECHO_CREDENTIAL_KEY`` is optional here (the
+    error, not a runtime error. ``TAMITOR_CREDENTIAL_KEY`` is optional here (the
     cipher layer raises if a real key is needed but absent); this keeps the
     settings loader usable in test contexts that inject an identity cipher.
     """
@@ -65,13 +65,13 @@ def load_db_settings(
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+psycopg://", 1)
 
-    raw_key = os.getenv("ECHO_CREDENTIAL_KEY") if credential_key is None else None
+    raw_key = os.getenv("TAMITOR_CREDENTIAL_KEY") if credential_key is None else None
     parsed_key: bytes | None = credential_key
     if parsed_key is None and raw_key:
         parsed_key = raw_key.encode("utf-8")
 
     region = default_phone_region or os.getenv(
-        "ECHO_DEFAULT_PHONE_REGION", _DEFAULT_PHONE_REGION
+        "TAMITOR_DEFAULT_PHONE_REGION", _DEFAULT_PHONE_REGION
     )
 
     parsed_pool = pool_size if pool_size is not None else _DEFAULT_POOL_SIZE

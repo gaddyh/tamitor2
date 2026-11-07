@@ -26,6 +26,7 @@ def test_parse_text_message():
                     "contacts": [
                         {"profile": {"name": "Gaddy"}, "wa_id": "972500000001"}
                     ],
+                    "metadata": {"phone_number_id": "business-123"},
                 }
             }]
         }]
@@ -34,6 +35,7 @@ def test_parse_text_message():
     assert event is not None
     assert event.event_id == "wamid.HBHKGUY"
     assert event.user_phone == "972500000001"
+    assert event.business_phone_number_id == "business-123"
     assert event.type is BotEventType.TEXT
     assert event.text == "מחר ב-8"
     assert event.timestamp is not None

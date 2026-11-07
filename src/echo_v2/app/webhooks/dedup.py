@@ -1,14 +1,11 @@
 """Webhook deduplication store.
 
 Providers deliver notifications at-least-once. When a provider does not
-receive a timely HTTP 200, it resends the same notification (Green retries
-after roughly a minute). The webhook route uses a :class:`WebhookDedupStore`
-to claim each notification exactly once within a process; a future persistent
-implementation (Redis/Postgres) will extend this across workers and restarts.
+receive a timely HTTP 200, it may resend the same notification. The webhook
+route uses a :class:`WebhookDedupStore` to claim each notification once within
+a process; a persistent store is required across workers and restarts.
 
-The store deduplicates on ``event_id`` -- the provider-assigned identity of a
-*notification*, not of a message. See :class:`ProviderMessageEvent` and
-siblings for the ``event_id`` format per event type.
+The store deduplicates on the provider-assigned ``event_id``.
 """
 
 from __future__ import annotations

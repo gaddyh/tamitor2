@@ -6,11 +6,18 @@ import pytest
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 
+from echo_v2.app.main import create_app
 from echo_v2.app.webhooks.dialog360 import build_router
 from echo_v2.ports.bot import BotEvent, BotEventType
 
 WEBHOOK_SECRET = "test-secret-123"
 AUTH_HEADER = {"Authorization": f"Bearer {WEBHOOK_SECRET}"}
+
+
+def test_unconfigured_app_does_not_accept_webhooks():
+    with TestClient(create_app()) as client:
+        assert client.get("/health").json() == {"status": "ok"}
+        assert client.post("/webhooks/bot/dialog360", json=_text_payload()).status_code == 404
 
 
 class RecordingFlowService:
@@ -73,7 +80,7 @@ def _contact_payload(msg_id: str = "wamid.CONTACT1") -> dict:
 def client():
     flow = RecordingFlowService()
     app = FastAPI()
-    app.include_router(build_router(flow_service=flow, webhook_secret=WEBHOOK_SECRET))
+    app.include_router(build_router(handler=flow, webhook_secret=WEBHOOK_SECRET))
     with TestClient(app) as c:
         yield c, flow
 
@@ -169,7 +176,7 @@ def no_secret_client():
     """Client with no webhook secret — auth is skipped."""
     flow = RecordingFlowService()
     app = FastAPI()
-    app.include_router(build_router(flow_service=flow, webhook_secret=""))
+    app.include_router(build_router(handler=flow, webhook_secret=""))
     with TestClient(app) as c:
         yield c, flow
 

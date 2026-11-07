@@ -24,7 +24,7 @@ def test_identity_cipher_satisfies_protocol():
 def test_local_cipher_round_trips():
     key = Fernet.generate_key()
     cipher = LocalKeyCredentialCipher(key)
-    plaintext = b"green-api-instance-111:token-secret"
+    plaintext = b"business-provider-token"
     ciphertext = cipher.encrypt(plaintext)
     assert ciphertext != plaintext
     assert cipher.decrypt(ciphertext) == plaintext

@@ -38,8 +38,8 @@ def test_load_db_settings_missing_url_raises_value_error(monkeypatch):
 
 def test_load_db_settings_from_env(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://env:env@localhost/envdb")
-    monkeypatch.setenv("ECHO_CREDENTIAL_KEY", "env-key-bytes")
-    monkeypatch.setenv("ECHO_DEFAULT_PHONE_REGION", "US")
+    monkeypatch.setenv("TAMITOR_CREDENTIAL_KEY", "env-key-bytes")
+    monkeypatch.setenv("TAMITOR_DEFAULT_PHONE_REGION", "US")
     settings = load_db_settings()
     assert settings.database_url == "postgresql+psycopg://env:env@localhost/envdb"
     assert settings.credential_key == b"env-key-bytes"
@@ -53,7 +53,7 @@ def test_load_db_settings_explicit_url_overrides_env(monkeypatch):
 
 
 def test_load_db_settings_explicit_credential_key_overrides_env(monkeypatch):
-    monkeypatch.setenv("ECHO_CREDENTIAL_KEY", "env-key")
+    monkeypatch.setenv("TAMITOR_CREDENTIAL_KEY", "env-key")
     settings = load_db_settings(
         database_url="postgresql+psycopg://u:p@localhost/db",
         credential_key=b"explicit-key",
@@ -62,7 +62,7 @@ def test_load_db_settings_explicit_credential_key_overrides_env(monkeypatch):
 
 
 def test_load_db_settings_no_credential_key_when_env_absent(monkeypatch):
-    monkeypatch.delenv("ECHO_CREDENTIAL_KEY", raising=False)
+    monkeypatch.delenv("TAMITOR_CREDENTIAL_KEY", raising=False)
     settings = load_db_settings(database_url="postgresql+psycopg://u:p@localhost/db")
     assert settings.credential_key is None
 

@@ -16,6 +16,30 @@ from echo_v2.persistence.db import (
     create_sync_engine_for_migrations,
 )
 from echo_v2.persistence.settings import DBSettings
+from echo_v2.persistence.orm import Base
+from sqlalchemy import ForeignKeyConstraint
+
+
+def test_foundation_schema_has_business_number_and_receipt_mapping():
+    tables = Base.metadata.tables
+    assert set(tables) == {
+        "businesses", "whatsapp_channels", "provider_webhook_events",
+        "idempotency_operations", "users", "contacts",
+    }
+    channel = tables["whatsapp_channels"]
+    assert {"business_id", "provider", "provider_phone_number_id"} <= set(channel.columns.keys())
+    assert any(
+        {"provider", "provider_phone_number_id"} == {c.name for c in constraint.columns}
+        for constraint in channel.constraints
+    )
+    receipt = tables["provider_webhook_events"]
+    assert {c.name for c in receipt.primary_key.columns} == {"provider", "event_id"}
+    assert any(
+        constraint.referred_table.name == "whatsapp_channels"
+        for constraint in receipt.constraints
+        if isinstance(constraint, ForeignKeyConstraint)
+    )
+
 
 
 def test_alembic_config_path_points_to_ini():
